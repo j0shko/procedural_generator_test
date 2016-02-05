@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 
 public class LandmassGenerator : MonoBehaviour {
 
@@ -8,9 +9,9 @@ public class LandmassGenerator : MonoBehaviour {
     [Range(0, 1)]
     public float persistance = 0.5f;
     [Range(1, 1024)]
-    public int width = 100;
+    public int width = 200;
     [Range(1, 1024)]
-    public int height = 100;
+    public int height = 200;
     [Range(1, 5)]
     public int octaveCount = 3;
 
@@ -19,30 +20,51 @@ public class LandmassGenerator : MonoBehaviour {
     [Range(0, 1)]
     public float coastPercentage = 0.2f;
 
-    public Color snow;
-    public Color mountainHigh;
-    public Color mountainLow;
-    public Color grassHigh;
-    public Color grassLow;
-    public Color sand;
-    public Color seaShallow;
-    public Color seaDeep;
+    public List<Color> colors;
 
     private float xOrg;
     private float yOrg;
 
+    public int samplingSize = 200;
+    public int scaleSize = 200;
+
+    public float heightFactor = 20;
+    public float quadSize = 1;
+
     private Renderer plane_renderer;
+
+    public enum MeshCenter
+    {
+        Middle,
+        LowerLeft,
+        UpperRight
+    };
+
+    public MeshCenter meshCenter;
 
 	// Use this for initialization
 	void Start () {
         plane_renderer = GetComponent<Renderer>();
         xOrg = Random.Range(0, 1024);
         yOrg = Random.Range(0, 1024);
+
+        generateHeightmap();
 	}
 	
 	// Update is called once per frame
 	void Update () {
         
+    }
+
+    public void generateHeightmap()
+    {
+        Debug.Log("Rendering again ...");
+
+        xOrg = Random.Range(0, 1024);
+        yOrg = Random.Range(0, 1024);
+
+        Texture2D noiseTexture = createNoiseTexture();
+        GetComponent<Renderer>().sharedMaterial.mainTexture = noiseTexture;
     }
 
     public Texture2D createNoiseTexture()
@@ -57,8 +79,8 @@ public class LandmassGenerator : MonoBehaviour {
             {
                 for (int x = 0; x < width; x++)
                 {
-                    float xCoord = xOrg + (float)x / width * Mathf.Pow(lucanarity, octave);
-                    float yCoord = yOrg + (float)y / height * Mathf.Pow(lucanarity, octave);
+                    float xCoord = xOrg + (float)x / samplingSize * Mathf.Pow(lucanarity, octave);
+                    float yCoord = yOrg + (float)y / samplingSize * Mathf.Pow(lucanarity, octave);
                     float noise = (Mathf.PerlinNoise(xCoord, yCoord) - 0.5f) * Mathf.Pow(persistance, octave);
                     pixelIntensity[y * width + x] += noise;
                 }
@@ -67,6 +89,8 @@ public class LandmassGenerator : MonoBehaviour {
 
         float radiusX = width / 2f;
         float radiusy = height / 2f;
+
+        calculateMaskVariables();
 
         for (int y = 0; y < height; y++)
         {
@@ -78,36 +102,43 @@ public class LandmassGenerator : MonoBehaviour {
                 float maskFactor = getMaskFactor(centerToX, centerToY);
 
                 float pixel = Mathf.Clamp((pixelIntensity[y * width + x] + 0.5f), 0, 1) * maskFactor;
+                pixelIntensity[y * width + x] = (pixelIntensity[y * width + x] + 0.5f) * maskFactor;
                 Color color = getColorForIntensity(pixel);
                 pixels[y * width + x] = color;
             }
         }
 
+        Mesh mesh = createMesh(pixelIntensity);
+
         noiseTex.SetPixels(pixels);
         noiseTex.Apply();
+
+        GetComponent<MeshFilter>().mesh = mesh;
+        //transform.localScale = new Vector3((float) width / scaleSize, 1, (float) height / scaleSize);
 
         return noiseTex;
     }
 
-    public void generateHeightmap()
+    private float majorCurveA;
+    private float majorCurveB;
+
+    private float minorCurveA;
+    private float minorCurveB;
+
+    private void calculateMaskVariables()
     {
-        Debug.Log("Rendering again ...");
+        majorCurveA = width / 2f * islandPercentage;
+        majorCurveB = height / 2f * islandPercentage;
 
-        xOrg = Random.Range(0, 500);
-        yOrg = Random.Range(0, 500);
+        float coastSize = ((majorCurveA + majorCurveB) * coastPercentage) / 2;
 
-        Texture2D noiseTexture = createNoiseTexture();
-        plane_renderer.material.mainTexture = noiseTexture;
+        minorCurveA = majorCurveA - coastSize;
+        minorCurveB = majorCurveB - coastSize;
     }
 
     private float getMaskFactor(float x, float y)
     {
         float factor = 1;
-        float majorCurveA = width / 2f * islandPercentage;
-        float majorCurveB = height / 2f * islandPercentage;
-
-        float minorCurveA = majorCurveA * (1 - coastPercentage);
-        float minorCurveB = majorCurveB * (1 - coastPercentage);
 
         float distancePoint = Mathf.Sqrt(x * x + y * y);
 
@@ -124,7 +155,7 @@ public class LandmassGenerator : MonoBehaviour {
             float y2 = k * x2;
             float distanceMinor = Mathf.Sqrt(x2 * x2 + y2 * y2);
 
-            factor = 1f - Mathf.Clamp((distancePoint - distanceMinor) / (distanceMajor - distanceMinor) , 0, 1);
+            factor = 1f - Mathf.Clamp((distancePoint - distanceMinor) / (distanceMajor - distanceMinor), 0, 1);
         }
         else
         {
@@ -136,37 +167,95 @@ public class LandmassGenerator : MonoBehaviour {
 
     private Color getColorForIntensity(float intensity)
     {
-        if (intensity >= 0 && intensity < 0.2f)
+        float resolution = 1f / colors.Count;
+        int index = Mathf.FloorToInt(intensity / resolution);
+        if (index == colors.Count)
         {
-            return seaDeep;
+            index--;
         }
-        else if (intensity >= 0.2f && intensity < 0.4f)
+        return colors[index];
+    }
+
+    private Color getGrayscaleForIntensity(float intensity)
+    {
+        return new Color(intensity, intensity, intensity);
+    }
+
+    private Mesh createMesh(float[] pixelIntensity)
+    {
+        Mesh mesh = new Mesh();
+        mesh.name = "LandmassMesh";
+        mesh.Clear();
+
+        int vertCount = (height + 1) * (width + 1);
+        Vector3[] vertices = new Vector3[vertCount];
+        Vector2[] uv = new Vector2[vertCount];
+        int[] faces = new int[6 * height * width];
+
+        int vertRows = height + 1;
+        int vertCols = width + 1;
+
+        Vector2 origin = new Vector2(0, 0);
+        if (meshCenter == MeshCenter.Middle)
         {
-            return seaShallow;
-        }
-        else if (intensity >= 0.4f && intensity < 0.5f)
+            origin.x = (width * quadSize) / 2;
+            origin.y = (height * quadSize) / 2;
+        } else if (meshCenter == MeshCenter.UpperRight)
         {
-            return sand;
+            origin.x = width * quadSize;
+            origin.y = height * quadSize;
         }
-        else if (intensity >= 0.5f && intensity < 0.6f)
+
+        for (int y = 0; y < vertRows ; y++)
         {
-            return grassLow;
+            for (int x = 0; x < vertCols; x++)
+            {
+                if (x == 0 || y == 0 || x == vertCols - 1 || y == vertRows - 1) 
+                {
+                    vertices[y * vertCols + x] = new Vector3(-origin.x + x * quadSize, 0, -origin.y + y * quadSize);
+                    uv[y * vertCols + x] = new Vector2((float) x / vertCols, (float) y / vertRows);
+                } else
+                {
+                    // pixels
+                    float downRight = pixelIntensity[y * width + x];
+                    float downLeft = pixelIntensity[y * width + (x - 1)];
+                    float upperRigth = pixelIntensity[(y - 1) * width + x];
+                    float upperLeft = pixelIntensity[(y - 1) * width + (x - 1)];
+
+                    float vertY = (downRight + downLeft + upperLeft + upperRigth) / 4f * heightFactor;
+
+                    vertices[y * vertCols + x] = new Vector3(-origin.x + x * quadSize, vertY, -origin.y + y * quadSize);
+                    uv[y * vertCols + x] = new Vector2((float) x / vertCols, (float) y / vertRows);
+                }
+            }
         }
-        else if (intensity >= 0.6f && intensity < 0.7f)
-        {
-            return grassHigh;
+
+        int j, i;
+        int lastColumn = vertCols - 1;
+        for (j = 0, i = 0; i < faces.Length ; j++, i += 6) {
+
+            if (j == lastColumn)
+            {
+                lastColumn += vertCols;
+                j++;
+            }
+
+            faces[i] = j;
+            faces[i + 1] = j + vertCols;
+            faces[i + 2] = j + 1;
+            
+            
+            faces[i + 3] = j + 1;
+            faces[i + 4] = j + vertCols;
+            faces[i + 5] = j + vertCols + 1;         
         }
-        else if (intensity >= 0.7f && intensity < 0.8f)
-        {
-            return mountainLow;
-        }
-        else if (intensity >= 0.8f && intensity < 0.9f)
-        {
-            return mountainHigh;
-        }
-        else
-        {
-            return snow;
-        }
+
+        mesh.vertices = vertices;
+        mesh.uv = uv;
+        mesh.triangles = faces;
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+
+        return mesh;
     }
 }
