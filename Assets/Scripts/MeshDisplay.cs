@@ -48,6 +48,7 @@ public class MeshDisplay : MapDisplay
         texture.Apply();
 
         textureRenderer.sharedMaterial.mainTexture = texture;
+        transform.localScale = Vector3.one;
     }
 
     private Mesh CreateMesh(float[,] heightMap, int width, int height)
@@ -80,24 +81,75 @@ public class MeshDisplay : MapDisplay
         {
             for (int x = 0; x < vertCols; x++)
             {
-                if (x == 0 || y == 0 || x == vertCols - 1 || y == vertRows - 1)
+                float vertY;
+
+                if (x != 0 && y != 0 && x != vertCols - 1 && y != vertRows - 1)
                 {
-                    vertices[y * vertCols + x] = new Vector3(-origin.x + x * quadSize, 0, -origin.y + y * quadSize);
-                    uv[y * vertCols + x] = new Vector2((float)x / vertCols, (float)y / vertRows);
+                    // everything that is not on the edge of the mesh
+                    float bottomRight = heightMap[x, y];
+                    float bottomLeft = heightMap[x - 1, y];
+                    float topRigth = heightMap[x, y - 1];
+                    float topLeft = heightMap[x - 1, y - 1];
+
+                    vertY = (bottomRight + bottomLeft + topLeft + topRigth) / 4f;
                 }
                 else
                 {
-                    // pixels
-                    float downRight = heightMap[x, y];
-                    float downLeft = heightMap[x - 1, y];
-                    float upperRigth = heightMap[x, y - 1];
-                    float upperLeft = heightMap[x - 1, y - 1];
+                    if (x == 0)
+                    {
+                        if (y == 0 || y == vertRows - 1)
+                        {
+                            // top left and bottom left corners
 
-                    float vertY = (downRight + downLeft + upperLeft + upperRigth) / 4f * heightFactor;
+                            vertY = heightMap[0, y - 1 < 0 ? 0 : y - 1];
+                        } else
+                        {
+                            // left edge
+                            float bottomRight = heightMap[0, y];
+                            float topRight = heightMap[0, y - 1];
 
-                    vertices[y * vertCols + x] = new Vector3(-origin.x + x * quadSize, vertY, -origin.y + y * quadSize);
-                    uv[y * vertCols + x] = new Vector2((float)x / vertCols, (float)y / vertRows);
+                            vertY = (topRight + bottomRight) / 2f;
+                        }
+
+                    } else if (x == vertCols - 1)
+                    {
+                        if (y == 0 || y == vertRows - 1)
+                        {
+                            // top right and bottom right corners
+
+                            vertY = heightMap[width - 1, y - 1 < 0 ? 0 : y - 1];
+                        }
+                        else
+                        {
+                            // right edge
+                            float bottomLeft = heightMap[width - 1, y];
+                            float topLeft = heightMap[width - 1, y - 1];
+
+                            vertY = (bottomLeft + topLeft) / 2f;
+                        }
+                    } else
+                    {
+                        if (y == 0)
+                        {
+                            // top edge 
+                            float bottomRight = heightMap[x, 0];
+                            float bottomLeft = heightMap[x - 1, 0];
+
+                            vertY = (bottomRight + bottomLeft) / 2f; 
+                        }
+                        else
+                        {
+                            // bottom edge
+                            float topRight = heightMap[x, height - 1];
+                            float topLeft = heightMap[x - 1, height - 1];
+
+                            vertY = (topRight + topLeft) / 2f;
+                        }
+                    }
                 }
+
+                vertices[y * vertCols + x] = new Vector3(-origin.x + x * quadSize, vertY * heightFactor, -origin.y + y * quadSize);
+                uv[y * vertCols + x] = new Vector2((float)x / vertCols, (float)y / vertRows);
             }
         }
 

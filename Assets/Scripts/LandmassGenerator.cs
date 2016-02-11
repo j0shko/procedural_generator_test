@@ -4,10 +4,10 @@ using System.Collections.Generic;
 
 public class LandmassGenerator : MonoBehaviour {
 
-    [Range(1, 100)]
-    public float lucanarity = 2;
+    [Range(1, 10)]
+    public float lacunarity = 2;
     [Range(0, 1)]
-    public float persistance = 0.5f;
+    public float persistence = 0.5f;
     [Range(1, 1024)]
     public int width = 200;
     [Range(1, 1024)]
@@ -24,6 +24,7 @@ public class LandmassGenerator : MonoBehaviour {
     public bool randomSeed;
     [Range(0, 4096)]
     public int seed;
+    public Vector2 offset;
 
     public MapDisplay displayer;
 
@@ -40,10 +41,17 @@ public class LandmassGenerator : MonoBehaviour {
     [Range(0, 1)]
     public float coastPercentage = 0.2f;
 
-    // Use this for initialization
-    void Start () {
-        //GenerateHeightmap();
-	}
+    void Start ()
+    {
+        seed = Random.Range(0, 4096);
+    }
+
+    void Update()
+    {
+        offset.x += 0.1f;
+        offset.y += 0.1f;
+        GenerateMap();
+    }
 
     public void GenerateMap()
     {
@@ -52,7 +60,7 @@ public class LandmassGenerator : MonoBehaviour {
             seed = Random.Range(0, 4096);
         }
 
-        float[,] noiseMap = Noise.GenerateNoise(width, height, noiseScale, lucanarity, persistance, octaveCount, seed);
+        float[,] noiseMap = Noise.GenerateNoise(width, height, noiseScale, lacunarity, persistence, octaveCount, seed, offset);
 
         ApplyMask(noiseMap);
 

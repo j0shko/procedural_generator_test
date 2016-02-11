@@ -4,6 +4,9 @@ using System;
 
 public class HeightMapDisplay : MapDisplay
 {
+    public Mesh mesh;
+
+    public MeshFilter meshFilter;
     public Renderer textureRenderer;
 
     public override void DisplayMap(float[,] heightMap)
@@ -26,5 +29,7 @@ public class HeightMapDisplay : MapDisplay
         texture.Apply();
 
         textureRenderer.sharedMaterial.mainTexture = texture;
+        meshFilter.mesh = mesh;
+        transform.localScale = new Vector3(width, 1, height);
     }
 }
