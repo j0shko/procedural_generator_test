@@ -43,13 +43,6 @@ public class LandmassGenerator : MonoBehaviour {
 
     void Start ()
     {
-        seed = Random.Range(0, 4096);
-    }
-
-    void Update()
-    {
-        offset.x += 0.1f;
-        offset.y += 0.1f;
         GenerateMap();
     }
 

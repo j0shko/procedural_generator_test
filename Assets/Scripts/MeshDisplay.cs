@@ -5,13 +5,16 @@ using System;
 
 public class MeshDisplay : MapDisplay
 {
-    public List<Color> colors;
-
     [Range(1, 10)]
     public int textureToModelRatio = 2;
 
     public float heightFactor = 20;
     public float quadSize = 1;
+    public AnimationCurve meshHeightCurve;
+
+    public TextureData textureData;
+
+    public Material terrainMaterial;
 
     public enum MeshCenter
     {
@@ -27,27 +30,14 @@ public class MeshDisplay : MapDisplay
 
     public override void DisplayMap(float[,] heightMap)
     {
-        int width = heightMap.GetLength(0);
-        int height = heightMap.GetLength(1);
         Mesh mesh = CreateMesh(heightMap, heightMap.GetLength(0), heightMap.GetLength(1));
 
         meshFilter.mesh = mesh;
 
-        Texture2D texture = new Texture2D(width, height);
-
-        Color[] colorMap = new Color[width * height];
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                colorMap[y * width + x] = GetColorForIntensity(heightMap[x, y]);
-            }
-        }
-
-        texture.SetPixels(colorMap);
-        texture.Apply();
-
-        textureRenderer.sharedMaterial.mainTexture = texture;
+        float minHeight = heightFactor * meshHeightCurve.Evaluate(0);
+        float maxHeight = heightFactor * meshHeightCurve.Evaluate(1);
+        textureData.UpdateMeshHeights(terrainMaterial, minHeight, maxHeight);
+        textureData.ApplyToMaterial(terrainMaterial);
         transform.localScale = Vector3.one;
     }
 
@@ -148,7 +138,12 @@ public class MeshDisplay : MapDisplay
                     }
                 }
 
-                vertices[y * vertCols + x] = new Vector3(-origin.x + x * quadSize, vertY * heightFactor, -origin.y + y * quadSize);
+                vertY = vertY * this.meshHeightCurve.Evaluate(vertY) * heightFactor;
+                if (vertY < 0)
+                {
+                    vertY = 0;
+                }
+                vertices[y * vertCols + x] = new Vector3(-origin.x + x * quadSize, vertY, -origin.y + y * quadSize);
                 uv[y * vertCols + x] = new Vector2((float)x / vertCols, (float)y / vertRows);
             }
         }
@@ -183,13 +178,8 @@ public class MeshDisplay : MapDisplay
         return mesh;
     }
 
-    private Color GetColorForIntensity(float intensity)
+    void OnTextureValuesUpdated()
     {
-        float resolution = 1f / colors.Count;
-        int index = Mathf.FloorToInt(intensity / resolution);
-
-        index = Mathf.Clamp(index, 0, colors.Count - 1);
-
-        return colors[index];
+        textureData.ApplyToMaterial(terrainMaterial);
     }
 }
